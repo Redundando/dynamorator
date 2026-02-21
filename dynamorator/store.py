@@ -52,8 +52,8 @@ class DynamoDBStore:
     
     def _create_table(self):
         """Create DynamoDB table with TTL enabled."""
-        @Logger(include_args=["store"], silent=self.silent, override_function_name="create_table")
-        def _create(store):
+        @Logger(silent=self.silent, override_function_name="create_table")
+        def _create(self):
             Logger.note(f"Creating DynamoDB table: {self.table_name}")
             
             self._client.create_table(
@@ -87,8 +87,8 @@ class DynamoDBStore:
     
     def get(self, key: str) -> Optional[dict]:
         """Retrieve JSON data by key. Returns None if not found or on error."""
-        @Logger(include_args=["store", "key"], silent=self.silent, override_function_name="get")
-        def _get(store, key):
+        @Logger(include_args=["self", "key"], silent=self.silent, override_function_name="get")
+        def _get(self, key):
             if not self.is_enabled():
                 return None
             
@@ -112,8 +112,8 @@ class DynamoDBStore:
     
     def put(self, key: str, data: dict, ttl_days: float):
         """Store JSON data with TTL. Silent error handling."""
-        @Logger(include_args=["store", "key"], silent=self.silent, override_function_name="put")
-        def _put(store, key, data, ttl_days):
+        @Logger(exclude_args=["data", "ttl_days"], silent=self.silent, override_function_name="put")
+        def _put(self, key, data, ttl_days):
             if not self.is_enabled():
                 return
             
@@ -137,8 +137,8 @@ class DynamoDBStore:
     
     def delete(self, key: str):
         """Delete entry by key. Silent error handling."""
-        @Logger(include_args=["store", "key"], silent=self.silent, override_function_name="delete")
-        def _delete(store, key):
+        @Logger(include_args=["self", "key"], silent=self.silent, override_function_name="delete")
+        def _delete(self, key):
             if not self.is_enabled():
                 return
             
@@ -154,8 +154,8 @@ class DynamoDBStore:
     
     def list_keys(self, limit: int = 100, last_key: Optional[str] = None) -> Dict:
         """List all keys in table. Returns {'keys': [...], 'last_key': ...}"""
-        @Logger(include_args=["store"], silent=self.silent, override_function_name="list_keys")
-        def _list_keys(store, limit, last_key):
+        @Logger(exclude_args=["limit", "last_key"], silent=self.silent, override_function_name="list_keys")
+        def _list_keys(self, limit, last_key):
             if not self.is_enabled():
                 return {'keys': [], 'last_key': None}
             
