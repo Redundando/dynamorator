@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dynamorator"
-version = "0.1.0"
+version = "0.1.1"
 description = "Lightweight DynamoDB JSON storage with automatic TTL support"
 readme = "README.md"
 requires-python = ">=3.7"
