@@ -9,14 +9,14 @@ description = "Lightweight DynamoDB JSON storage with automatic TTL support"
 readme = "README.md"
 requires-python = ">=3.7"
 license = {text = "MIT"}
+license-files = ["LICENSE"]
 authors = [
     {name = "Arved Klöhn"}
 ]
-keywords = ["dynamodb", "aws", "json", "storage", "cache", "ttl"]
+keywords = ["dynamodb", "aws", "json", "storage", "cache", "ttl", "database"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
@@ -29,7 +29,7 @@ classifiers = [
 ]
 dependencies = [
     "boto3",
-    "logorator>=1.0.0"
+    "logorator>=2.0.0"
 ]
 
 [project.urls]

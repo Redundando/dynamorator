@@ -4,12 +4,13 @@ Lightweight DynamoDB JSON storage with automatic TTL support. A simple, reliable
 
 ## Features
 
-- 🚀 Simple key-value JSON storage in DynamoDB
-- ⏰ Automatic TTL (Time To Live) support
-- 🔄 Automatic table creation with proper configuration
-- 🛡️ Silent error handling - never crashes your application
-- 📦 Shared boto3 client for efficiency
-- 🎯 Minimal dependencies (boto3, logorator)
+- Simple key-value JSON storage in DynamoDB
+- Automatic TTL (Time To Live) support
+- Automatic table creation with proper configuration
+- Silent error handling - never crashes your application
+- Shared boto3 client for efficiency
+- Optional logging with logorator
+- Minimal dependencies (boto3, logorator)
 
 ## Installation
 
@@ -38,6 +39,18 @@ print(result['keys'])  # ['user:123', ...]
 
 # Delete data
 store.delete("user:123")
+```
+
+## Silent Mode
+
+Disable logging for production environments:
+
+```python
+# With logging (default)
+store = DynamoDBStore(table_name="my-store")
+
+# Silent mode - no logging
+store = DynamoDBStore(table_name="my-store", silent=True)
 ```
 
 ## AWS Credentials Setup
@@ -79,12 +92,13 @@ If the table already exists, you only need: `PutItem`, `GetItem`, `DeleteItem`, 
 
 ## API Reference
 
-### `DynamoDBStore(table_name=None)`
+### `DynamoDBStore(table_name=None, silent=False)`
 
 Initialize the store.
 
 **Parameters:**
 - `table_name` (str, optional): DynamoDB table name. If None, the store is disabled.
+- `silent` (bool, optional): If True, disables all logging output. Default is False.
 
 **Behavior:**
 - Automatically creates the table if it doesn't exist

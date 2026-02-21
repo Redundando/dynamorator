@@ -13,8 +13,9 @@ class DynamoDBStore:
     _clients = {}
     _table_exists_cache = {}
     
-    def __init__(self, table_name: Optional[str] = None):
+    def __init__(self, table_name: Optional[str] = None, silent: bool = False):
         self.table_name = table_name
+        self.silent = silent
         self._client = None
         
         if self.is_enabled():
@@ -51,113 +52,133 @@ class DynamoDBStore:
     
     def _create_table(self):
         """Create DynamoDB table with TTL enabled."""
-        Logger.note(f"Creating DynamoDB table: {self.table_name}")
+        @Logger(include_args=["store"], silent=self.silent, override_function_name="create_table")
+        def _create(store):
+            Logger.note(f"Creating DynamoDB table: {self.table_name}")
+            
+            self._client.create_table(
+                TableName=self.table_name,
+                KeySchema=[
+                    {'AttributeName': 'cache_id', 'KeyType': 'HASH'}
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'cache_id', 'AttributeType': 'S'}
+                ],
+                BillingMode='PAY_PER_REQUEST'
+            )
+            
+            Logger.note(f"Waiting for table to be ready: {self.table_name}")
+            waiter = self._client.get_waiter('table_exists')
+            waiter.wait(TableName=self.table_name)
+            
+            Logger.note(f"Enabling TTL on table: {self.table_name}")
+            self._client.update_time_to_live(
+                TableName=self.table_name,
+                TimeToLiveSpecification={
+                    'Enabled': True,
+                    'AttributeName': 'ttl'
+                }
+            )
+            
+            Logger.note(f"Table ready: {self.table_name}")
+            self._table_exists_cache[self.table_name] = True
         
-        self._client.create_table(
-            TableName=self.table_name,
-            KeySchema=[
-                {'AttributeName': 'cache_id', 'KeyType': 'HASH'}
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'cache_id', 'AttributeType': 'S'}
-            ],
-            BillingMode='PAY_PER_REQUEST'
-        )
-        
-        Logger.note(f"Waiting for table to be ready: {self.table_name}")
-        waiter = self._client.get_waiter('table_exists')
-        waiter.wait(TableName=self.table_name)
-        
-        Logger.note(f"Enabling TTL on table: {self.table_name}")
-        self._client.update_time_to_live(
-            TableName=self.table_name,
-            TimeToLiveSpecification={
-                'Enabled': True,
-                'AttributeName': 'ttl'
-            }
-        )
-        
-        Logger.note(f"Table ready: {self.table_name}")
-        self._table_exists_cache[self.table_name] = True
+        _create(self)
     
     def get(self, key: str) -> Optional[dict]:
         """Retrieve JSON data by key. Returns None if not found or on error."""
-        if not self.is_enabled():
-            return None
-        
-        try:
-            response = self._client.get_item(
-                TableName=self.table_name,
-                Key={'cache_id': {'S': key}}
-            )
-            
-            if 'Item' not in response:
+        @Logger(include_args=["store", "key"], silent=self.silent, override_function_name="get")
+        def _get(store, key):
+            if not self.is_enabled():
                 return None
             
-            data_str = response['Item'].get('data', {}).get('S')
-            if data_str:
-                return json.loads(data_str)
-            return None
-        except Exception:
-            return None
+            try:
+                response = self._client.get_item(
+                    TableName=self.table_name,
+                    Key={'cache_id': {'S': key}}
+                )
+                
+                if 'Item' not in response:
+                    return None
+                
+                data_str = response['Item'].get('data', {}).get('S')
+                if data_str:
+                    return json.loads(data_str)
+                return None
+            except Exception:
+                return None
+        
+        return _get(self, key)
     
     def put(self, key: str, data: dict, ttl_days: float):
         """Store JSON data with TTL. Silent error handling."""
-        if not self.is_enabled():
-            return
-        
-        try:
-            now = int(time.time())
-            ttl = now + int(ttl_days * 86400)
+        @Logger(include_args=["store", "key"], silent=self.silent, override_function_name="put")
+        def _put(store, key, data, ttl_days):
+            if not self.is_enabled():
+                return
             
-            self._client.put_item(
-                TableName=self.table_name,
-                Item={
-                    'cache_id': {'S': key},
-                    'data': {'S': json.dumps(data, cls=DateTimeEncoder)},
-                    'ttl': {'N': str(ttl)},
-                    'created_at': {'N': str(now)}
-                }
-            )
-        except Exception:
-            pass
+            try:
+                now = int(time.time())
+                ttl = now + int(ttl_days * 86400)
+                
+                self._client.put_item(
+                    TableName=self.table_name,
+                    Item={
+                        'cache_id': {'S': key},
+                        'data': {'S': json.dumps(data, cls=DateTimeEncoder)},
+                        'ttl': {'N': str(ttl)},
+                        'created_at': {'N': str(now)}
+                    }
+                )
+            except Exception:
+                pass
+        
+        _put(self, key, data, ttl_days)
     
     def delete(self, key: str):
         """Delete entry by key. Silent error handling."""
-        if not self.is_enabled():
-            return
+        @Logger(include_args=["store", "key"], silent=self.silent, override_function_name="delete")
+        def _delete(store, key):
+            if not self.is_enabled():
+                return
+            
+            try:
+                self._client.delete_item(
+                    TableName=self.table_name,
+                    Key={'cache_id': {'S': key}}
+                )
+            except Exception:
+                pass
         
-        try:
-            self._client.delete_item(
-                TableName=self.table_name,
-                Key={'cache_id': {'S': key}}
-            )
-        except Exception:
-            pass
+        _delete(self, key)
     
     def list_keys(self, limit: int = 100, last_key: Optional[str] = None) -> Dict:
         """List all keys in table. Returns {'keys': [...], 'last_key': ...}"""
-        if not self.is_enabled():
-            return {'keys': [], 'last_key': None}
+        @Logger(include_args=["store"], silent=self.silent, override_function_name="list_keys")
+        def _list_keys(store, limit, last_key):
+            if not self.is_enabled():
+                return {'keys': [], 'last_key': None}
+            
+            try:
+                params = {
+                    'TableName': self.table_name,
+                    'ProjectionExpression': 'cache_id',
+                    'Limit': limit
+                }
+                
+                if last_key:
+                    params['ExclusiveStartKey'] = {'cache_id': {'S': last_key}}
+                
+                response = self._client.scan(**params)
+                
+                keys = [item['cache_id']['S'] for item in response.get('Items', [])]
+                next_key = None
+                
+                if 'LastEvaluatedKey' in response:
+                    next_key = response['LastEvaluatedKey']['cache_id']['S']
+                
+                return {'keys': keys, 'last_key': next_key}
+            except Exception:
+                return {'keys': [], 'last_key': None}
         
-        try:
-            params = {
-                'TableName': self.table_name,
-                'ProjectionExpression': 'cache_id',
-                'Limit': limit
-            }
-            
-            if last_key:
-                params['ExclusiveStartKey'] = {'cache_id': {'S': last_key}}
-            
-            response = self._client.scan(**params)
-            
-            keys = [item['cache_id']['S'] for item in response.get('Items', [])]
-            next_key = None
-            
-            if 'LastEvaluatedKey' in response:
-                next_key = response['LastEvaluatedKey']['cache_id']['S']
-            
-            return {'keys': keys, 'last_key': next_key}
-        except Exception:
-            return {'keys': [], 'last_key': None}
+        return _list_keys(self, limit, last_key)
