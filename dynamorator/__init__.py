@@ -3,5 +3,5 @@
 from .store import DynamoDBStore
 from .encoder import DateTimeEncoder
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 __all__ = ["DynamoDBStore", "DateTimeEncoder"]
