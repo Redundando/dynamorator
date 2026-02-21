@@ -1,0 +1,2 @@
+boto3
+logorator>=1.0.0
