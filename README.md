@@ -5,6 +5,8 @@ Lightweight DynamoDB JSON storage with automatic TTL support. A simple, reliable
 ## Features
 
 - Simple key-value JSON storage in DynamoDB
+- Batch operations for retrieving multiple items efficiently
+- Optional gzip compression with configurable threshold
 - Automatic TTL (Time To Live) support
 - Automatic table creation with proper configuration
 - Silent error handling - never crashes your application
@@ -32,6 +34,11 @@ store.put("user:123", {"name": "Alice", "score": 100}, ttl_days=7)
 # Retrieve data
 data = store.get("user:123")  # Returns dict or None
 print(data)  # {'name': 'Alice', 'score': 100}
+
+# Batch retrieve multiple items
+keys = ["user:123", "user:456", "user:789"]
+cached = store.batch_get(keys)
+print(f"Found {len(cached)} items")
 
 # List all keys
 result = store.list_keys(limit=50)
@@ -90,15 +97,69 @@ Your AWS credentials need the following DynamoDB permissions:
 
 If the table already exists, you only need: `PutItem`, `GetItem`, `DeleteItem`, and `Scan`.
 
+## Compression
+
+Enable gzip compression for large items to reduce storage costs and improve performance:
+
+```python
+# Enable compression with default 1KB threshold
+store = DynamoDBStore(
+    table_name="my-store",
+    compress=True
+)
+
+# Custom compression threshold (only compress if JSON > 2KB)
+store = DynamoDBStore(
+    table_name="my-store",
+    compress=True,
+    compress_threshold=2048
+)
+
+# Compression is transparent - no API changes needed
+store.put("large:1", {"data": "x" * 10000}, ttl_days=7)
+data = store.get("large:1")  # Automatically decompressed
+```
+
+**Compression behavior:**
+- Only compresses items larger than threshold (default: 1024 bytes)
+- Uses gzip compression + base64 encoding
+- Automatically decompresses on retrieval
+- Works with both `get()` and `batch_get()`
+- Stores compression flag with each item
+- Backward compatible with uncompressed items
+
+## Batch Operations
+
+Retrieve multiple items efficiently with a single API call:
+
+```python
+# Check which items exist in cache
+keys = [f"product:{asin}" for asin in product_ids]
+cached = store.batch_get(keys)
+
+print(f"Found {len(cached)} cached items")
+for key, data in cached.items():
+    print(f"{key}: {data}")
+```
+
+**Batch features:**
+- Retrieves up to 10,000 keys per call
+- Automatically chunks into batches of 100 (DynamoDB limit)
+- Handles UnprocessedKeys with exponential backoff
+- Returns only found items (missing keys are omitted)
+- Works with compressed and uncompressed items
+
 ## API Reference
 
-### `DynamoDBStore(table_name=None, silent=False)`
+### `DynamoDBStore(table_name=None, silent=False, compress=False, compress_threshold=1024)`
 
 Initialize the store.
 
 **Parameters:**
 - `table_name` (str, optional): DynamoDB table name. If None, the store is disabled.
 - `silent` (bool, optional): If True, disables all logging output. Default is False.
+- `compress` (bool, optional): Enable gzip compression for items. Default is False.
+- `compress_threshold` (int, optional): Only compress items larger than this (bytes). Default is 1024.
 
 **Behavior:**
 - Automatically creates the table if it doesn't exist
@@ -133,6 +194,35 @@ if data:
     print(f"Found: {data}")
 else:
     print("Not found")
+```
+
+### `batch_get(keys: list[str]) -> dict[str, dict]`
+
+Retrieve multiple items efficiently.
+
+**Parameters:**
+- `keys` (list[str]): List of keys to retrieve (max 10,000)
+
+**Returns:** Dictionary mapping found keys to their data. Missing keys are omitted.
+
+**Behavior:**
+- Automatically chunks requests into batches of 100
+- Retries UnprocessedKeys with exponential backoff (5 attempts)
+- Silently truncates to 10,000 keys if more provided
+- Works with compressed and uncompressed items
+
+```python
+# Batch retrieve
+keys = ["user:1", "user:2", "user:3"]
+results = store.batch_get(keys)
+
+for key, data in results.items():
+    print(f"{key}: {data}")
+
+# Check cache hit rate
+cached_count = len(results)
+total_count = len(keys)
+print(f"Cache hit rate: {cached_count}/{total_count}")
 ```
 
 ### `put(key: str, data: dict, ttl_days: float)`
@@ -204,9 +294,10 @@ Dynamorator creates tables with the following structure:
 Partition Key: cache_id (String)
 
 Attributes:
-  - data (String)       - JSON serialized dictionary
+  - data (String)       - JSON serialized dictionary (or compressed+base64)
   - ttl (Number)        - Unix timestamp for expiration
   - created_at (Number) - Unix timestamp of creation
+  - compressed (Bool)   - True if data is gzip compressed (optional)
 
 TTL: Enabled on 'ttl' attribute
 Billing: PAY_PER_REQUEST
@@ -269,10 +360,12 @@ data = store.get("event:1")
 ## Use Cases
 
 - **Session Storage**: Store user sessions with automatic expiration
-- **Cache Layer**: Simple caching for API responses or computed data
+- **Cache Layer**: Simple caching for API responses or computed data with batch retrieval
+- **Product Catalog Cache**: Batch check which products are cached before fetching from API
 - **Feature Flags**: Store and retrieve feature flag configurations
 - **Temporary Data**: Any data that should automatically expire
 - **User Preferences**: Store user settings with optional expiration
+- **Large Object Storage**: Use compression for storing large JSON objects efficiently
 
 ## Disabled Mode
 
