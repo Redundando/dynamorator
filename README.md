@@ -28,6 +28,9 @@ from dynamorator import DynamoDBStore
 # Initialize (table will be auto-created if it doesn't exist)
 store = DynamoDBStore(table_name="my-data-store")
 
+# Or specify an AWS region explicitly
+store = DynamoDBStore(table_name="my-data-store", region_name="us-east-1")
+
 # Store data (expires in 7 days)
 store.put("user:123", {"name": "Alice", "score": 100}, ttl_days=7)
 
@@ -151,7 +154,7 @@ for key, data in cached.items():
 
 ## API Reference
 
-### `DynamoDBStore(table_name=None, silent=False, compress=False, compress_threshold=1024)`
+### `DynamoDBStore(table_name=None, silent=False, compress=False, compress_threshold=1024, region_name=None)`
 
 Initialize the store.
 
@@ -160,6 +163,7 @@ Initialize the store.
 - `silent` (bool, optional): If True, disables all logging output. Default is False.
 - `compress` (bool, optional): Enable gzip compression for items. Default is False.
 - `compress_threshold` (int, optional): Only compress items larger than this (bytes). Default is 1024.
+- `region_name` (str, optional): AWS region (e.g., `"us-east-1"`). If None, uses the default boto3 resolution chain.
 
 **Behavior:**
 - Automatically creates the table if it doesn't exist

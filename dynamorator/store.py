@@ -37,26 +37,28 @@ class DynamoDBStore:
     _clients = {}
     _table_exists_cache = {}
     
-    def __init__(self, table_name: Optional[str] = None, silent: bool = False, compress: bool = False, compress_threshold: int = None):
+    def __init__(self, table_name: Optional[str] = None, silent: bool = False, compress: bool = False, compress_threshold: int = None, region_name: Optional[str] = None):
         self.table_name = table_name
         self.silent = silent
         self.compress = compress
         self.compress_threshold = compress_threshold or self.DEFAULT_COMPRESS_THRESHOLD
+        self.region_name = region_name
         self._client = None
         
         if self.is_enabled():
-            self._client = self._get_client()
+            self._client = self._get_client(region_name=self.region_name)
             self._ensure_table_exists()
     
     def __str__(self):
         return f"DynamoDBStore(table_name={self.table_name})"
     
     @classmethod
-    def _get_client(cls):
+    def _get_client(cls, region_name: Optional[str] = None):
         """Get or create shared boto3 DynamoDB client."""
-        if 'dynamodb' not in cls._clients:
-            cls._clients['dynamodb'] = boto3.client('dynamodb')
-        return cls._clients['dynamodb']
+        cache_key = ('dynamodb', region_name)
+        if cache_key not in cls._clients:
+            cls._clients[cache_key] = boto3.client('dynamodb', region_name=region_name)
+        return cls._clients[cache_key]
     
     def is_enabled(self) -> bool:
         """Returns True if table_name is set and boto3 is available."""
